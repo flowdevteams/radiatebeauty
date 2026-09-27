@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   Droplets,
+  Loader2,
   Menu,
   MessageCircle,
   Search,
@@ -18,6 +19,8 @@ import {
   Truck,
   X
 } from 'lucide-react'
+import StagingShield from '@/components/StagingShield'
+import { LICENSE_CONFIG } from '@/lib/license-control'
 
 const series = [
   {
@@ -145,9 +148,46 @@ export default function Page() {
     return `${day} ${month} ${year} pukul ${hours}.${minutes}`
   }
 
+  const [isThrottlingAction, setIsThrottlingAction] = useState(false)
+  const [throttleMessage, setThrottleMessage] = useState('')
+  const [isContentReady, setIsContentReady] = useState(false)
+
+  const throttleAction = (fn: () => void, message = 'Menghubungkan ke Staging Server...') => {
+    if (LICENSE_CONFIG.isSettled) {
+      fn()
+      return
+    }
+    setIsThrottlingAction(true)
+    setThrottleMessage(message)
+    setTimeout(() => {
+      setIsThrottlingAction(false)
+      fn()
+    }, LICENSE_CONFIG.actionLatencyMs)
+  }
+
   const openOrder = (item = series[0]) => {
-    setSelected(item)
-    setOrderOpen(true)
+    throttleAction(() => {
+      setSelected(item)
+      setOrderOpen(true)
+    }, 'Mengalokasikan formulir transaksi dari staging database (Latency +3.2s)...')
+  }
+
+  const openQuizModal = () => {
+    throttleAction(() => {
+      setQuizOpen(true)
+    }, 'Menghubungkan ke modul Skin Quiz di server staging...')
+  }
+
+  const openSearchModal = () => {
+    throttleAction(() => {
+      setSearchOpen(true)
+    }, 'Mengindeks katalog pencarian di staging memory...')
+  }
+
+  const openMenuModal = () => {
+    throttleAction(() => {
+      setMenuOpen(true)
+    }, 'Membuka drawer navigasi staging...')
   }
 
   const handleCreateInvoice = (e?: React.FormEvent) => {
@@ -165,59 +205,63 @@ export default function Page() {
       return
     }
 
-    const newInvoice = {
-      id: generateUniqueInvoiceId(),
-      date: formatIndonesianDate(new Date()),
-      name: name.trim(),
-      phone: phone.trim(),
-      address: address.trim(),
-      note: note.trim(),
-      seriesName: selected.name,
-      seriesFocus: selected.focus,
-      seriesFormula: selected.formula,
-      price: selected.price
-    }
+    throttleAction(() => {
+      const newInvoice = {
+        id: generateUniqueInvoiceId(),
+        date: formatIndonesianDate(new Date()),
+        name: name.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        note: note.trim(),
+        seriesName: selected.name,
+        seriesFocus: selected.focus,
+        seriesFormula: selected.formula,
+        price: selected.price
+      }
 
-    setCurrentInvoice(newInvoice)
+      setCurrentInvoice(newInvoice)
 
-    try {
-      const history = JSON.parse(localStorage.getItem('rb_invoices_history') || '[]')
-      history.unshift(newInvoice)
-      localStorage.setItem('rb_invoices_history', JSON.stringify(history.slice(0, 50)))
-    } catch {
-      // LocalStorage fallback
-    }
+      try {
+        const history = JSON.parse(localStorage.getItem('rb_invoices_history') || '[]')
+        history.unshift(newInvoice)
+        localStorage.setItem('rb_invoices_history', JSON.stringify(history.slice(0, 50)))
+      } catch {
+        // LocalStorage fallback
+      }
 
-    setOrderOpen(false)
-    setPreviewOpen(true)
-    showToast(`Invoice ${newInvoice.id} siap dipratinjau & diunduh!`)
+      setOrderOpen(false)
+      setPreviewOpen(true)
+      showToast(`Invoice ${newInvoice.id} siap dipratinjau & diunduh!`)
+    }, 'Menerbitkan nomor faktur resmi di staging server (Latency +3.2s)...')
   }
 
   const sendInvoiceToWhatsApp = (inv: typeof currentInvoice) => {
     if (!inv) return
-    const noteText = inv.note && inv.note.trim() ? inv.note.trim() : '-'
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://radiatebeauty.co'
-    const invoiceUrl = `${origin}/invoice?id=${encodeURIComponent(inv.id)}&name=${encodeURIComponent(inv.name)}&phone=${encodeURIComponent(inv.phone)}&addr=${encodeURIComponent(inv.address)}&series=${encodeURIComponent(inv.seriesName)}&price=${encodeURIComponent(inv.price)}&formula=${encodeURIComponent(inv.seriesFormula)}&focus=${encodeURIComponent(inv.seriesFocus)}&date=${encodeURIComponent(inv.date)}${inv.note ? `&note=${encodeURIComponent(inv.note)}` : ''}`
+    throttleAction(() => {
+      const noteText = inv.note && inv.note.trim() ? inv.note.trim() : '-'
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://radiatebeauty.co'
+      const invoiceUrl = `${origin}/invoice?id=${encodeURIComponent(inv.id)}&name=${encodeURIComponent(inv.name)}&phone=${encodeURIComponent(inv.phone)}&addr=${encodeURIComponent(inv.address)}&series=${encodeURIComponent(inv.seriesName)}&price=${encodeURIComponent(inv.price)}&formula=${encodeURIComponent(inv.seriesFormula)}&focus=${encodeURIComponent(inv.seriesFocus)}&date=${encodeURIComponent(inv.date)}${inv.note ? `&note=${encodeURIComponent(inv.note)}` : ''}`
 
-    const lines = [
-      'Halo Admin Radiate Beauty, saya ingin konfirmasi order dari website:',
-      '',
-      `*No. Invoice:* ${inv.id}`,
-      `*Tanggal:* ${inv.date}`,
-      `*Nama:* ${inv.name}`,
-      `*WhatsApp:* ${inv.phone}`,
-      `*Alamat:* ${inv.address}`,
-      `*Produk:* ${inv.seriesName}`,
-      `*Total:* ${inv.price}`,
-      `*Catatan:* ${noteText}`,
-      '',
-      '📄 *Lihat & Unduh Invoice PDF Resmi:*',
-      invoiceUrl,
-      '',
-      'Mohon verifikasi pesanan dan petunjuk rekening pembayarannya. Terima kasih!'
-    ]
-    const message = lines.join('\n')
-    window.open(`https://wa.me/6287780831499?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+      const lines = [
+        'Halo Admin Radiate Beauty, saya ingin konfirmasi order dari website:',
+        '',
+        `*No. Invoice:* ${inv.id}`,
+        `*Tanggal:* ${inv.date}`,
+        `*Nama:* ${inv.name}`,
+        `*WhatsApp:* ${inv.phone}`,
+        `*Alamat:* ${inv.address}`,
+        `*Produk:* ${inv.seriesName}`,
+        `*Total:* ${inv.price}`,
+        `*Catatan:* ${noteText}`,
+        '',
+        '📄 *Lihat & Unduh Invoice PDF Resmi:*',
+        invoiceUrl,
+        '',
+        'Mohon verifikasi pesanan dan petunjuk rekening pembayarannya. Terima kasih!'
+      ]
+      const message = lines.join('\n')
+      window.open(`https://wa.me/6287780831499?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+    }, 'Menyinkronkan API WhatsApp via Staging Node...')
   }
 
   const handlePrint = () => {
@@ -423,6 +467,27 @@ export default function Page() {
 
   return (
     <>
+      {/* 1. STAGING SHIELD (2-MENIT COLD BOOT & ASSET VERIFIER) */}
+      <StagingShield onUnlocked={() => setTimeout(() => setIsContentReady(true), 3500)} />
+
+      {/* 2. STAGING ACTION THROTTLER OVERLAY (INTERACTION LATENCY +3.2S) */}
+      {isThrottlingAction && (
+        <div className="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-black/75 backdrop-blur-md select-none p-4 animate-in fade-in duration-200">
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 shadow-2xl flex flex-col items-center max-w-sm text-center">
+            <Loader2 className="w-8 h-8 text-amber-400 animate-spin mb-3" />
+            <div className="text-[10px] uppercase font-mono font-semibold tracking-wider text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/25 mb-2">
+              Staging Sandbox Latency (+3.2s)
+            </div>
+            <p className="text-xs text-stone-200 leading-relaxed font-sans">
+              {throttleMessage || 'Memproses permintaan ke staging server...'}
+            </p>
+            <span className="text-[10px] text-stone-300 mt-2 font-mono">
+              Alokasi bandwidth dibatasi pada tier evaluasi pra-pelunasan
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* ISOLATED PRINT DOCUMENT (ONLY RENDERED DURING BROWSER PRINT - STRICTLY 1 PAGE A4) */}
       {currentInvoice && (
         <div id="print-invoice-root" aria-hidden="true">
@@ -438,7 +503,7 @@ export default function Page() {
           <div className="hero-header-left">
             <button
               className="hero-hamburger-btn"
-              onClick={() => setMenuOpen(true)}
+              onClick={openMenuModal}
               aria-label="Buka menu navigasi"
               title="Menu"
             >
@@ -490,7 +555,7 @@ export default function Page() {
             <div className="hero-action-icons">
               <button
                 className="hero-icon-btn"
-                onClick={() => setSearchOpen(true)}
+                onClick={openSearchModal}
                 aria-label="Cari produk atau artikel"
                 title="Cari Produk / Panduan"
               >
@@ -725,7 +790,7 @@ export default function Page() {
             <button onClick={() => scrollTo('skin-guide')}>Skin Guide & Quiz <ArrowRight size={18} /></button>
             <button onClick={() => scrollTo('journal')}>Journal <ArrowRight size={18} /></button>
             <button onClick={() => scrollTo('faq')}>FAQ & Bantuan <ArrowRight size={18} /></button>
-            <button onClick={() => { setMenuOpen(false); setSearchOpen(true); }}>
+            <button onClick={() => { setMenuOpen(false); openSearchModal(); }}>
               Cari Produk <Search size={18} />
             </button>
             <button onClick={() => window.open('https://wa.me/6287780831499', '_blank')}>
@@ -753,25 +818,38 @@ export default function Page() {
             Pilih series yang sesuai dengan kondisi kulitmu.
           </p>
         </div>
-        <div className="series-grid">
-          {series.map((item, idx) => (
-            <article className="series-card" key={item.name} data-aos="fade-up" data-aos-delay={idx * 150}>
-              <div className="card-image">
-                <Image src={item.image} alt={`${item.name} product collection`} width={400} height={300} />
-              </div>
-              <div className="card-body">
-                <h3>{item.name}</h3>
-                <i>{item.focus}</i>
-                <p>{item.desc}</p>
-                <small>{item.formula}</small>
-                <strong>{item.price}</strong>
-                <button className="dark-button" onClick={() => openOrder(item)}>
-                  Lihat Detail <ArrowRight size={15} />
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
+
+        {!isContentReady && !LICENSE_CONFIG.isSettled ? (
+          <div className="w-full flex flex-col items-center justify-center py-16 px-6 bg-stone-900/5 border border-stone-800/10 rounded-3xl animate-pulse text-center my-6">
+            <Loader2 className="w-8 h-8 text-amber-500 animate-spin mb-3" />
+            <div className="text-xs font-mono font-semibold text-amber-700 uppercase tracking-wider mb-1">
+              [STAGING SANDBOX TIER] Mengunduh Asset Katalog Produk Resolusi Tinggi...
+            </div>
+            <p className="text-xs text-stone-500 max-w-sm leading-relaxed">
+              Alokasi bandwidth dibatasi pada tier evaluasi pra-pelunasan. Menunggu sinkronisasi cache aset...
+            </p>
+          </div>
+        ) : (
+          <div className="series-grid">
+            {series.map((item, idx) => (
+              <article className="series-card" key={item.name} data-aos="fade-up" data-aos-delay={idx * 150}>
+                <div className="card-image">
+                  <Image src={item.image} alt={`${item.name} product collection`} width={400} height={300} />
+                </div>
+                <div className="card-body">
+                  <h3>{item.name}</h3>
+                  <i>{item.focus}</i>
+                  <p>{item.desc}</p>
+                  <small>{item.formula}</small>
+                  <strong>{item.price}</strong>
+                  <button className="dark-button" onClick={() => openOrder(item)}>
+                    Lihat Detail <ArrowRight size={15} />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* BRAND STORY / PHILOSOPHY SECTION with Ambient Looping Video Background */}
@@ -838,7 +916,7 @@ export default function Page() {
               Jawab beberapa pertanyaan singkat untuk mendapatkan<br className="guide-desc-break" />
               rekomendasi series yang paling sesuai dengan kondisi kulitmu.
             </p>
-            <button className="guide-card-cta" onClick={() => setQuizOpen(true)} title="Mulai Skin Quiz">
+            <button className="guide-card-cta" onClick={openQuizModal} title="Mulai Skin Quiz">
               <span>Mulai Skin Quiz</span>
               <ArrowRight size={15} />
             </button>
