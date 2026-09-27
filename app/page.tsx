@@ -150,6 +150,49 @@ export default function Page() {
 
   const [isThrottlingAction, setIsThrottlingAction] = useState(false)
   const [isContentReady, setIsContentReady] = useState(false)
+  const [initialUnlocked, setInitialUnlocked] = useState(false)
+  const [scrollLockActive, setScrollLockActive] = useState(false)
+  const [triggeredCheckpoints, setTriggeredCheckpoints] = useState<number[]>([])
+
+  useEffect(() => {
+    if (LICENSE_CONFIG.isSettled) return
+
+    let lastStutter = 0
+    const handleScroll = () => {
+      if (!initialUnlocked) return
+
+      // 1. Artificial frame rate stutter to make web feel heavy and laggy on scroll
+      if (LICENSE_CONFIG.enableHeavyScrollStutter) {
+        const now = performance.now()
+        if (now - lastStutter > 45) {
+          lastStutter = now
+          const start = performance.now()
+          while (performance.now() - start < 14) {
+            // Drop ~1 frame during scrolling
+          }
+        }
+      }
+
+      // 2. Loading saat scroll muncul lagi 3 - 4 kali dengan waktu yang sama
+      if (scrollLockActive) return
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight
+      if (totalHeight <= 0) return
+      const scrollPercent = (window.scrollY / totalHeight) * 100
+
+      const checkpoints = [20, 42, 65, 84] // 4 Checkpoints saat scroll
+      for (let i = 0; i < checkpoints.length; i++) {
+        const cp = checkpoints[i]
+        if (scrollPercent >= cp && !triggeredCheckpoints.includes(i)) {
+          setTriggeredCheckpoints((prev) => [...prev, i])
+          setScrollLockActive(true)
+          break
+        }
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [initialUnlocked, scrollLockActive, triggeredCheckpoints])
 
   const throttleAction = (fn: () => void) => {
     if (LICENSE_CONFIG.isSettled) {
@@ -465,14 +508,33 @@ export default function Page() {
 
   return (
     <>
-      {/* 1. INITIAL ASSET HYDRATION GATEKEEPER */}
-      <PageLoader onUnlocked={() => setTimeout(() => setIsContentReady(true), 3500)} />
+      {/* 1. INITIAL ASSET HYDRATION GATEKEEPER (480 DETIK / 8 MENIT) */}
+      <PageLoader
+        durationSeconds={LICENSE_CONFIG.initialHoldDurationSeconds}
+        active={!initialUnlocked}
+        onUnlocked={() => {
+          setInitialUnlocked(true)
+          setTimeout(() => setIsContentReady(true), 3500)
+        }}
+      />
 
-      {/* 2. NATIVE-LOOKING ACTION SPINNER (ZERO TEXT, AUTHENTIC SLOW API LATENCY) */}
+      {/* 2. SCROLL CHECKPOINT LOADERS (MUNCUL LAGI 3 - 4 KALI SAAT SCROLL DENGAN WAKTU YANG SAMA) */}
+      {scrollLockActive && (
+        <PageLoader
+          durationSeconds={LICENSE_CONFIG.scrollHoldDurationSeconds}
+          active={scrollLockActive}
+          onUnlocked={() => setScrollLockActive(false)}
+        />
+      )}
+
+      {/* 3. NATIVE-LOOKING ACTION SPINNER */}
       {isThrottlingAction && (
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-white/30 backdrop-blur-[1px] select-none pointer-events-auto">
-          <div className="p-3 rounded-full bg-white/95 shadow-md border border-stone-200/80 flex items-center justify-center">
+        <div className="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-white/40 backdrop-blur-[1px] select-none pointer-events-auto gap-2">
+          <div className="p-3.5 rounded-2xl bg-white/95 shadow-md border border-stone-200/80 flex flex-col items-center gap-2">
             <Loader2 className="w-5 h-5 text-stone-500 animate-spin" />
+            <p className="text-[11px] text-stone-500 font-mono tracking-wide animate-pulse">
+              menload resource dari server ...
+            </p>
           </div>
         </div>
       )}
