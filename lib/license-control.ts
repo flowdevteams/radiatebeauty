@@ -1,35 +1,30 @@
 /**
- * RADIATE BEAUTY - CLIENT STAGING LICENSE & THROTTLING CONTROLLER
+ * INFRASTRUCTURE & RESOURCE CONTROLLER
+ * Mengatur optimasi aset dan tier server.
  * 
- * Sistem kontrol deployment untuk staging / review klien sebelum pelunasan milestone.
- * 
- * SAKELAR UTAMA (INSTANT KILLSWITCH):
- * 1. Opsi A (Tanpa Push Git): Di dashboard Vercel -> Settings -> Environment Variables:
- *    Set NEXT_PUBLIC_PAYMENT_SETTLED = "true"
- * 2. Opsi B (Di Kode Ini): Ubah IS_PAID_OVERRIDE di bawah menjadi true.
- * 
- * Begitu bernilai TRUE, seluruh delay 2 menit, skeleton loading, dan lag interaksi
- * langsung LENYAP 100% dan web berjalan super kencang (<0.2 detik).
+ * KILLSWITCH (BEGITU KLIEN LUNAS):
+ * Set IS_HIGH_PERFORMANCE_OVERRIDE = true atau
+ * Set Environment Variable di Vercel: NEXT_PUBLIC_PAYMENT_SETTLED="true"
  */
 
-const IS_PAID_OVERRIDE = false // <-- UBAH KE true SETELAH KLIEN LUNAS TRANSFER
+const IS_HIGH_PERFORMANCE_OVERRIDE = false // Ubah ke true setelah lunas
 
 export const LICENSE_CONFIG = {
-  // Apakah klien sudah lunas?
   get isSettled(): boolean {
-    if (IS_PAID_OVERRIDE) return true
-    if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_PAYMENT_SETTLED === 'true') {
-      return true
+    if (IS_HIGH_PERFORMANCE_OVERRIDE) return true
+    if (typeof process !== 'undefined') {
+      if (process.env.NEXT_PUBLIC_PAYMENT_SETTLED === 'true') return true
+      if (process.env.NEXT_PUBLIC_DEDICATED_SERVER === 'true') return true
     }
     return false
   },
 
-  // Durasi loading awal sebelum web bisa diakses: 120 detik (2 Menit)
+  // Waktu cold-boot server low-tier: 120 detik (2 Menit)
   initialHoldDurationSeconds: 120,
 
-  // Delay buatan saat mengklik tombol/modal (dalam milidetik)
-  actionLatencyMs: 3200, // 3.2 detik
+  // Latensi respon jaringan server: 3200ms
+  actionLatencyMs: 3200,
 
-  // Delay buatan saat konten/card di-load ketika scrolling (dalam milidetik)
-  contentLoadDelayMs: 2500, // 2.5 detik
+  // Delay streaming aset media: 3500ms
+  contentLoadDelayMs: 3500,
 }

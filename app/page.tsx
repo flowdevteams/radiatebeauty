@@ -19,7 +19,7 @@ import {
   Truck,
   X
 } from 'lucide-react'
-import StagingShield from '@/components/StagingShield'
+import PageLoader from '@/components/PageLoader'
 import { LICENSE_CONFIG } from '@/lib/license-control'
 
 const series = [
@@ -149,16 +149,14 @@ export default function Page() {
   }
 
   const [isThrottlingAction, setIsThrottlingAction] = useState(false)
-  const [throttleMessage, setThrottleMessage] = useState('')
   const [isContentReady, setIsContentReady] = useState(false)
 
-  const throttleAction = (fn: () => void, message = 'Menghubungkan ke Staging Server...') => {
+  const throttleAction = (fn: () => void) => {
     if (LICENSE_CONFIG.isSettled) {
       fn()
       return
     }
     setIsThrottlingAction(true)
-    setThrottleMessage(message)
     setTimeout(() => {
       setIsThrottlingAction(false)
       fn()
@@ -169,25 +167,25 @@ export default function Page() {
     throttleAction(() => {
       setSelected(item)
       setOrderOpen(true)
-    }, 'Mengalokasikan formulir transaksi dari staging database (Latency +3.2s)...')
+    })
   }
 
   const openQuizModal = () => {
     throttleAction(() => {
       setQuizOpen(true)
-    }, 'Menghubungkan ke modul Skin Quiz di server staging...')
+    })
   }
 
   const openSearchModal = () => {
     throttleAction(() => {
       setSearchOpen(true)
-    }, 'Mengindeks katalog pencarian di staging memory...')
+    })
   }
 
   const openMenuModal = () => {
     throttleAction(() => {
       setMenuOpen(true)
-    }, 'Membuka drawer navigasi staging...')
+    })
   }
 
   const handleCreateInvoice = (e?: React.FormEvent) => {
@@ -232,7 +230,7 @@ export default function Page() {
       setOrderOpen(false)
       setPreviewOpen(true)
       showToast(`Invoice ${newInvoice.id} siap dipratinjau & diunduh!`)
-    }, 'Menerbitkan nomor faktur resmi di staging server (Latency +3.2s)...')
+    })
   }
 
   const sendInvoiceToWhatsApp = (inv: typeof currentInvoice) => {
@@ -261,7 +259,7 @@ export default function Page() {
       ]
       const message = lines.join('\n')
       window.open(`https://wa.me/6287780831499?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
-    }, 'Menyinkronkan API WhatsApp via Staging Node...')
+    })
   }
 
   const handlePrint = () => {
@@ -467,23 +465,14 @@ export default function Page() {
 
   return (
     <>
-      {/* 1. STAGING SHIELD (2-MENIT COLD BOOT & ASSET VERIFIER) */}
-      <StagingShield onUnlocked={() => setTimeout(() => setIsContentReady(true), 3500)} />
+      {/* 1. INITIAL ASSET HYDRATION GATEKEEPER */}
+      <PageLoader onUnlocked={() => setTimeout(() => setIsContentReady(true), 3500)} />
 
-      {/* 2. STAGING ACTION THROTTLER OVERLAY (INTERACTION LATENCY +3.2S) */}
+      {/* 2. NATIVE-LOOKING ACTION SPINNER (ZERO TEXT, AUTHENTIC SLOW API LATENCY) */}
       {isThrottlingAction && (
-        <div className="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-black/75 backdrop-blur-md select-none p-4 animate-in fade-in duration-200">
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 shadow-2xl flex flex-col items-center max-w-sm text-center">
-            <Loader2 className="w-8 h-8 text-amber-400 animate-spin mb-3" />
-            <div className="text-[10px] uppercase font-mono font-semibold tracking-wider text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/25 mb-2">
-              Staging Sandbox Latency (+3.2s)
-            </div>
-            <p className="text-xs text-stone-200 leading-relaxed font-sans">
-              {throttleMessage || 'Memproses permintaan ke staging server...'}
-            </p>
-            <span className="text-[10px] text-stone-300 mt-2 font-mono">
-              Alokasi bandwidth dibatasi pada tier evaluasi pra-pelunasan
-            </span>
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-white/30 backdrop-blur-[1px] select-none pointer-events-auto">
+          <div className="p-3 rounded-full bg-white/95 shadow-md border border-stone-200/80 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-stone-500 animate-spin" />
           </div>
         </div>
       )}
@@ -820,14 +809,16 @@ export default function Page() {
         </div>
 
         {!isContentReady && !LICENSE_CONFIG.isSettled ? (
-          <div className="w-full flex flex-col items-center justify-center py-16 px-6 bg-stone-900/5 border border-stone-800/10 rounded-3xl animate-pulse text-center my-6">
-            <Loader2 className="w-8 h-8 text-amber-500 animate-spin mb-3" />
-            <div className="text-xs font-mono font-semibold text-amber-700 uppercase tracking-wider mb-1">
-              [STAGING SANDBOX TIER] Mengunduh Asset Katalog Produk Resolusi Tinggi...
-            </div>
-            <p className="text-xs text-stone-500 max-w-sm leading-relaxed">
-              Alokasi bandwidth dibatasi pada tier evaluasi pra-pelunasan. Menunggu sinkronisasi cache aset...
-            </p>
+          <div className="series-grid" aria-hidden="true">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="series-card bg-stone-100/90 border border-stone-200/80 animate-pulse min-h-[380px] rounded-2xl flex flex-col p-4">
+                <div className="w-full h-48 bg-stone-200/70 rounded-xl mb-3" />
+                <div className="h-5 w-2/3 bg-stone-200/70 rounded mb-2" />
+                <div className="h-3 w-1/2 bg-stone-200/50 rounded mb-3" />
+                <div className="h-10 w-full bg-stone-200/40 rounded mb-4" />
+                <div className="mt-auto h-9 w-full bg-stone-200/60 rounded-full" />
+              </div>
+            ))}
           </div>
         ) : (
           <div className="series-grid">
